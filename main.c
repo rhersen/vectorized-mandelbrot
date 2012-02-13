@@ -90,12 +90,12 @@ int main ()
 
     float scale = RESN / 4.0;
  
-    for(int limit = 1; limit <= 256; ++limit) {
+    for(float limit = 1; limit <= 128; ++limit) {
         for(int i=0; i < RESN; i++) {
             float cImag = (i - RESN / 2.2)/scale;
             for(int j=0; j < RESN; j += 8) {
                 float a[8];
-                int result[8];
+                float result[8];
                 for (int k = 0; k < 8; ++k) {
                     float cReal = (j + k - RESN / 2.0)/scale;
                     a[k] = cReal;
