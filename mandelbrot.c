@@ -35,61 +35,56 @@ int getIterations(float x, float y, int limit) {
         imag = i1;
 
         if (!result && hasEscaped(real, imag)) {
-            result = count;
+            return count;
         }
     }
 
     return result;
 }
 
-void iterations(float* xs, float y, float limit, float* result) {
-    __m256 real = {0};
-    __m256 imag = {0};
-    __m256 product1;
-    __m256 product2;
-    __m256 diff;
-    __m256 r1;
-    __m256 i1;
-    __m256 sum;
-    __m256 xsv;
-    __m256 zero;
-    __m256 two;
-    __m256 four;
-    __m256 yv;
-    __m256 isEscaped;
-    __m256 notDone;
-    __m256 counts;
-    __m256 results;
-    __m256 tmp;
+#define plus _mm256_add_ps
+#define minus _mm256_sub_ps
+#define times _mm256_mul_ps
+#define and _mm256_and_ps
+
+typedef __m256 v;
+
+void iterations(float* xs, float yf, float limit, float* result) {
+    v inline square(v x) {
+        return times(x, x);
+    }
+
+    v inline lessThan(v x, v y) {
+        return _mm256_cmp_ps(x, y, 1);
+    }
+
+    v inline equal(v x, v y) {
+        return _mm256_cmp_ps(x, y, 0);
+    }
+
+    v real = {0}, imag = {0}, x, c0, c1, c4, y, limits, results;
 
     for (int i = 0; i < 8; ++i) {
-        result[i] = 0;
-        xsv[i] = xs[i];
-        zero[i] = 0;
-        two[i] = 2;
-        four[i] = 4;
-        yv[i] = y;
-        notDone[i] = 1;
+        x[i] = xs[i];
+        y[i] = yf;
+        c0[i] = 0;
+        c1[i] = 1;
+        c4[i] = 4;
+        limits[i] = limit;
         results[i] = 0;
     }
 
-    for (float count = 1; count < limit; ++count) {
-        product1 = _mm256_mul_ps(real, real);
-        product2 = _mm256_mul_ps(imag, imag);
-        diff = _mm256_sub_ps(product1, product2);
-        r1 = _mm256_add_ps(diff, xsv);
-        product1 = _mm256_mul_ps(two, real);
-        product2 = _mm256_mul_ps(product1, imag);
-        i1 = _mm256_add_ps(product2, yv);
-        product1 = _mm256_mul_ps(r1, r1);
-        product2 = _mm256_mul_ps(i1, i1);
-        sum = _mm256_add_ps(product1, product2);
-        isEscaped = _mm256_cmp_ps(four, sum, 1);
-        counts = _mm256_broadcast_ss(&count);
-        tmp = _mm256_cmp_ps(results, zero, 0);
-        tmp = _mm256_and_ps(tmp, isEscaped);
-        tmp = _mm256_and_ps(tmp, counts);
-        results = _mm256_add_ps(results, tmp);
+    v notDone = equal(results, c0);
+
+    for (v i = plus(c0, c1);
+         !_mm256_testz_ps(notDone, lessThan(i, limits));
+         i = plus(i, c1)) {
+        v r1 = plus(minus(square(real), square(imag)), x);
+        v i1 = plus(times(plus(real, real), imag), y);
+        v isEscaped = lessThan(c4, plus(square(r1), square(i1)));
+        notDone = equal(results, c0);
+        v isEscapedNow = and(notDone, isEscaped);
+        results = plus(results, and(isEscapedNow, i));
         real = r1;
         imag = i1;
     }
