@@ -49,7 +49,7 @@ int getIterations(float x, float y, int limit) {
 
 typedef __m256 v;
 
-void iterations(float* xs, float yf, float limit, float* result) {
+void iterationsv(float* xs, float* ys, float limit, float* result) {
     v inline square(v x) {
         return times(x, x);
     }
@@ -66,7 +66,7 @@ void iterations(float* xs, float yf, float limit, float* result) {
 
     for (int i = 0; i < 8; ++i) {
         x[i] = xs[i];
-        y[i] = yf;
+        y[i] = ys[i];
         c0[i] = 0;
         c1[i] = 1;
         c4[i] = 4;
@@ -92,4 +92,15 @@ void iterations(float* xs, float yf, float limit, float* result) {
     for (int i = 0; i < 8; ++i) {
         result[i] = results[i];
     }
+}
+
+void iterations(float* xs, float yf, float limit, float* result) {
+    float ys[8];
+    float limits[8];
+
+    for (int i = 0; i < 8; ++i) {
+        ys[i] = yf;
+    }
+
+    iterationsv(xs, ys, limit, result);
 }
