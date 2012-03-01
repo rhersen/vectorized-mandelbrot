@@ -43,13 +43,20 @@ v2df *Crvs;
  */
 uint8_t *bitmap;
 
+static void write(int x, int y, int two_pixels) {
+    /*
+     * Add the two pixels to the bitmap, all bits are
+     * initially zero since the area was allocated with
+     * calloc()
+     */
+    uint8_t *row_bitmap = bitmap + (bytes_per_row * y);
+    row_bitmap[x >> 3] |= (uint8_t) (two_pixels >> (x & 7));
+}
 
 static void calc_row(int y) {
-    uint8_t *row_bitmap = bitmap + (bytes_per_row * y);
-    int x;
     const v2df Civ_init = { y*inverse_h-1.0, y*inverse_h-1.0 };
 
-    for (x=0; x<N; x+=2)
+    for (int x=0; x<N; x+=2)
     {
         v2df Crv = Crvs[x >> 1];
         v2df Civ = Civ_init;
@@ -57,11 +64,10 @@ static void calc_row(int y) {
         v2df Ziv = zero;
         v2df Trv = zero;
         v2df Tiv = zero;
-        int i = 50;
-        int two_pixels;
+        int two_pixels = 1;
         v2df is_still_bounded;
 
-        do {
+        for (int i = 0; i < 50 && two_pixels; ++i) {
             Ziv = (Zrv*Ziv) + (Zrv*Ziv) + Civ;
             Zrv = Trv - Tiv + Crv;
             Trv = Zrv * Zrv;
@@ -81,20 +87,9 @@ static void calc_row(int y) {
              * bounded.
              */
             two_pixels = __builtin_ia32_movmskpd(is_still_bounded);
-        } while (--i > 0 && two_pixels);
+        }
 
-        /*
-         * The pixel bits must be in the most and second most
-         * significant position
-         */
-        two_pixels <<= 6;
-
-        /*
-         * Add the two pixels to the bitmap, all bits are
-         * initially zero since the area was allocated with
-         * calloc()
-         */
-        row_bitmap[x >> 3] |= (uint8_t) (two_pixels >> (x & 7));
+        write(x, y, two_pixels << 6);
     }
 }
 
