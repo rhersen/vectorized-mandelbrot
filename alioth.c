@@ -72,25 +72,33 @@ static void calc_row(int y) {
             Zrv = Trv - Tiv + Crv;
             Trv = Zrv * Zrv;
             Tiv = Ziv * Ziv;
-
-            /*
-             * All bits will be set to 1 if 'Trv + Tiv' is less than 4
-             * and all bits will be set to 0 otherwise. Two elements
-             * are calculated in parallel here.
-             */
             is_still_bounded = __builtin_ia32_cmplepd(Trv + Tiv, four);
-
-            /*
-             * Move the sign-bit of the low element to bit 0, move the
-             * sign-bit of the high element to bit 1. The result is
-             * that the pixel will be set if the calculation was
-             * bounded.
-             */
             two_pixels = __builtin_ia32_movmskpd(is_still_bounded);
         }
 
         write(x, y, two_pixels << 6);
     }
+}
+
+static void printPbm1() {
+    int column = 0;
+    printf("P1\n%d %d\n", N, N);
+
+    for (int i = 0; i < bytes_per_row * N; ++i) {
+        for (int j = 7; j >= 0; --j) {
+            printf("%d", (bitmap[i] >> j) & 1);
+
+            if (++column >= 70) {
+                printf("\n");
+                column = 0;
+            }
+        }
+    }
+}
+
+static void printPbm4() {
+    printf("P4\n%d %d\n", N, N);
+    fwrite(bitmap, bytes_per_row, N, stdout);
 }
 
 int main (int argc, char **argv)
@@ -123,9 +131,7 @@ int main (int argc, char **argv)
     for (i = 0; i < N; i++)
         calc_row(i);
 
-    printf("P4\n%d %d\n", N, N);
-    fwrite(bitmap, bytes_per_row, N, stdout);
-
+    printPbm4();
     free(bitmap);
     free(Crvs);
 
