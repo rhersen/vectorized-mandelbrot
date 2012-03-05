@@ -17,6 +17,7 @@
 typedef double v2df __attribute__ ((vector_size(16)));
 
 const v2df zero = { 0.0, 0.0 };
+const v2df one = { 1.0, 1.0 };
 const v2df four = { 4.0, 4.0 };
 
 /*
@@ -46,32 +47,57 @@ static void write(int x, int y, int two_pixels) {
     row_bitmap[x] = two_pixels;
 }
 
+int calc_1(int x, int y, int limit) {
+    double Crv = x*inverse_w-1.5;
+    double Civ = y*inverse_h-1.0;
+    double Zrv = 0.;
+    double Ziv = 0.;
+    double Trv = 0.;
+    double Tiv = 0.;
+    int is_still_bounded = 1;
+    int i;
+
+    for (i = 0; i < limit && Trv + Tiv < 4.; ++i) {
+        Ziv = (Zrv*Ziv) + (Zrv*Ziv) + Civ;
+        Zrv = Trv - Tiv + Crv;
+        Trv = Zrv * Zrv;
+        Tiv = Ziv * Ziv;
+    }
+
+    return i == limit ? 0 : i;
+}
+
+static int isNotDone(v2df rv) {
+    return __builtin_ia32_movmskpd(__builtin_ia32_cmpeqpd(rv, zero));
+}
+
+static v2df and(v2df v1, v2df v2, v2df v3) {
+    return __builtin_ia32_andpd(__builtin_ia32_andpd(v1, v2), v3);
+}
+
 void calc_2(int x, int y, int limit, int* r) {
     const v2df Civ_init = { y*inverse_h-1.0, y*inverse_h-1.0 };
-    v2df Crv = Crvs[x >> 1];
+    v2df Crv = { (x)*inverse_w-1.5, (x+1.0)*inverse_w-1.5 };
     v2df Civ = Civ_init;
     v2df Zrv = zero;
     v2df Ziv = zero;
     v2df Trv = zero;
     v2df Tiv = zero;
-    int two_pixels = 1;
-    v2df is_still_bounded;
+    v2df rv = { 0. };
 
-    for (int i = 0; i < limit; ++i) {
+    for (v2df i = zero; i[0] < limit && isNotDone(rv); i += one) {
         Ziv = (Zrv*Ziv) + (Zrv*Ziv) + Civ;
         Zrv = Trv - Tiv + Crv;
         Trv = Zrv * Zrv;
         Tiv = Ziv * Ziv;
-        is_still_bounded = __builtin_ia32_cmplepd(Trv + Tiv, four);
 
-        if (!is_still_bounded[0] && !r[0]) {
-            r[0] = i;
-        }
-
-        if (!is_still_bounded[1] && !r[1]) {
-            r[1] = i;
-        }
+        v2df escaped = __builtin_ia32_cmpgtpd(Trv + Tiv, four);
+        v2df isRvZero = __builtin_ia32_cmpeqpd(rv, zero);
+        rv = __builtin_ia32_orpd(rv, and(isRvZero, escaped, i));
     }
+
+    r[0] = rv[0] ? rv[0] + 1 : 0;
+    r[1] = rv[1] ? rv[1] + 1 : 0;
 }
 
 static void calc_row(int y) {
@@ -80,9 +106,11 @@ static void calc_row(int y) {
         int r[2] = { 0 };
 
         calc_2(x, y, 255, r);
+        /* r[0] = calc_1(x, y, 255); */
+        /* r[1] = calc_1(x + 1, y, 255); */
 
-        write(x + 1, y, r[0]);
-        write(x, y, r[1]);
+        write(x, y, r[0]);
+        write(x + 1, y, r[1]);
     }
 }
 
