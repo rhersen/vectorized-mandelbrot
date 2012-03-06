@@ -21,40 +21,22 @@ const v2df one = { 1.0, 1.0 };
 const v2df four = { 4.0, 4.0 };
 
 /*
- * Constant throughout the program, value depends on N
- */
-int bytes_per_row;
-double inverse_w;
-double inverse_h;
-
-/*
- * Program argument: height and width of the image
- */
-int N;
-
-/*
- * Lookup table for initial real-axis value
- */
-v2df *Crvs;
-
-/*
  * Mandelbrot bitmap
  */
 static uint8_t *bitmap;
 
-static void write(int x, int y, int two_pixels) {
+static void write(int N, int x, int y, int two_pixels) {
     uint8_t *row_bitmap = bitmap + (N * y);
     row_bitmap[x] = two_pixels;
 }
 
-int calc_1(int x, int y, int limit) {
+int calc_1(int x, int y, int limit, double inverse_w, double inverse_h) {
     double Crv = x*inverse_w-1.5;
     double Civ = y*inverse_h-1.0;
     double Zrv = 0.;
     double Ziv = 0.;
     double Trv = 0.;
     double Tiv = 0.;
-    int is_still_bounded = 1;
     int i;
 
     for (i = 0; i < limit && Trv + Tiv < 4.; ++i) {
@@ -67,15 +49,15 @@ int calc_1(int x, int y, int limit) {
     return i == limit ? 0 : i;
 }
 
-static int isNotDone(v2df rv) {
+static inline int isNotDone(v2df rv) {
     return __builtin_ia32_movmskpd(__builtin_ia32_cmpeqpd(rv, zero));
 }
 
-static v2df and(v2df v1, v2df v2, v2df v3) {
+static inline v2df and(v2df v1, v2df v2, v2df v3) {
     return __builtin_ia32_andpd(__builtin_ia32_andpd(v1, v2), v3);
 }
 
-void calc_2(int x, int y, int limit, int* r) {
+void calc_2(int x, int y, int limit, double inverse_w, double inverse_h, int* r) {
     const v2df Civ_init = { y*inverse_h-1.0, y*inverse_h-1.0 };
     v2df Crv = { (x)*inverse_w-1.5, (x+1.0)*inverse_w-1.5 };
     v2df Civ = Civ_init;
@@ -100,21 +82,21 @@ void calc_2(int x, int y, int limit, int* r) {
     r[1] = rv[1] ? rv[1] + 1 : 0;
 }
 
-static void calc_row(int y) {
+static void calc_row(int N, int y, double inverse_w, double inverse_h) {
     for (int x=0; x<N; x+=2)
     {
         int r[2] = { 0 };
 
-        calc_2(x, y, 255, r);
-        /* r[0] = calc_1(x, y, 255); */
-        /* r[1] = calc_1(x + 1, y, 255); */
+        /* calc_2(x, y, 50, inverse_w, inverse_h, r); */
+        r[0] = calc_1(x, y, 50, inverse_w, inverse_h);
+        r[1] = calc_1(x + 1, y, 50, inverse_w, inverse_h);
 
-        write(x, y, r[0]);
-        write(x + 1, y, r[1]);
+        write(N, x, y, r[0]);
+        write(N, x + 1, y, r[1]);
     }
 }
 
-static void printPgm2() {
+static void printPgm2(int N) {
     int column = 0;
     printf("P2\n%d %d %d\n", N, N, 255);
 
@@ -130,14 +112,31 @@ static void printPgm2() {
     printf("\n");
 }
 
-static void printPbm4() {
+static void printPbm4(int N, int bytes_per_row) {
     printf("P4\n%d %d\n", N, N);
     fwrite(bitmap, bytes_per_row, N, stdout);
 }
 
-int main (int argc, char **argv)
+int maine(int argc, char **argv)
 {
     int i;
+
+/*
+ * Constant throughout the program, value depends on N
+ */
+int bytes_per_row;
+double inverse_w;
+double inverse_h;
+
+/*
+ * Program argument: height and width of the image
+ */
+int N;
+
+/*
+ * Lookup table for initial real-axis value
+ */
+v2df *Crvs;
 
     N = atoi(argv[1]);
     bytes_per_row = (N + 7) >> 3;
@@ -163,9 +162,9 @@ int main (int argc, char **argv)
 
 #pragma omp parallel for schedule(static,1)
     for (i = 0; i < N; i++)
-        calc_row(i);
+        calc_row(N, i, inverse_w, inverse_h);
 
-    printPgm2();
+    printPgm2(N);
     free(bitmap);
     free(Crvs);
 
