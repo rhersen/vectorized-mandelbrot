@@ -45,14 +45,20 @@ int main(void) {
             assertEquals(calc_1(x + i, y, limit, iw, ih), e[i]);
         }
 
-        int r[2] = { 0 };
-
         for (int i = 0; i < 4; i += 2) {
+            int r[2] = { 0 };
             calc_2(x + i, y, limit, iw, ih, r);
 
             for (int j = 0; j < 2; ++j) {
                 assertEquals(r[j], e[i + j]);
             }
+        }
+
+        int r[4] = { 0 };
+        calc_4(x, y, limit, iw, ih, r);
+
+        for (int j = 0; j < 4; ++j) {
+            assertEquals(r[j], e[j]);
         }
     }
 

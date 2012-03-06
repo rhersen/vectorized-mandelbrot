@@ -12,19 +12,25 @@ static void write(int N, int x, int y, int two_pixels) {
 }
 
 static void calc_row(int N, int y, double inverse_w, double inverse_h) {
-    for (int x=0; x<N; x+=2)
+    for (int x=0; x<N; x+=4)
     {
         int r[2] = { 0 };
 
-        if (vectorSize == 2) {
-            calc_2(x, y, 255, inverse_w, inverse_h, r);
+        if (vectorSize == 4) {
+            calc_4(x, y, 255, inverse_w, inverse_h, r);
+        } else if (vectorSize == 2) {
+            for (int i = 0; i < 4; i += 2) {
+                calc_2(x + i, y, 255, inverse_w, inverse_h, r + i);
+            }
         } else {
-            r[0] = calc_1(x, y, 255, inverse_w, inverse_h);
-            r[1] = calc_1(x + 1, y, 255, inverse_w, inverse_h);
+            for (int i = 0; i < 4; ++i) {
+                r[i] = calc_1(x + i, y, 255, inverse_w, inverse_h);
+            }
         }
 
-        write(N, x, y, r[0]);
-        write(N, x + 1, y, r[1]);
+        for (int i = 0; i < 4; ++i) {
+            write(N, x + i, y, r[i]);
+        }
     }
 }
 
