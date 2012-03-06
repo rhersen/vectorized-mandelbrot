@@ -1,121 +1,104 @@
-#include <X11/Xlib.h>
-#include <X11/Xutil.h>
-#include <X11/Xos.h>
-#include <stdlib.h>
+#include <stdint.h>
 #include <stdio.h>
-#include <string.h>
-#include <math.h>
-#include "mandelbrot.h"
+#include <stdlib.h>
+#include "pgm.h"
 
-#define RESN 512
+static uint8_t *bitmap;
+static int vectorSize = 2;
 
-static Display *display;
-static Window win;
-static GC gc;
-
-static void createWindow() {
-    unsigned int width, height, x, y, border_width;
-    unsigned screen;
-    char *window_name = "Mandelbrot Set", *display_name = NULL;
-    unsigned
-        long valuemask = 0;
-    XGCValues values;
-    XSizeHints size_hints;
-    XSetWindowAttributes attr[1];
-
-    if ( (display = XOpenDisplay (display_name)) == NULL ) {
-        fprintf (stderr, "drawon: cannot connect to X server %s\n",
-                 XDisplayName (display_name) );
-        exit (-1);
-    }
- 
-    screen = DefaultScreen (display);
-
-    /* set window size */
-
-    width = RESN;
-    height = RESN;
-
-    /* set window position */
-
-    x = 0;
-    y = 0;
-
-    /* create opaque window */
-
-    border_width = 4;
-    win = XCreateSimpleWindow (display, RootWindow (display, screen),
-                               x, y, width, height, border_width, 
-                               BlackPixel (display, screen),
-                               WhitePixel (display, screen));
-
-    size_hints.flags = USPosition|USSize;
-    size_hints.x = x;
-    size_hints.y = y;
-    size_hints.width = width;
-    size_hints.height = height;
-    size_hints.min_width = 300;
-    size_hints.min_height = 300;
- 
-    XSetNormalHints (display, win, &size_hints);
-    XStoreName(display, win, window_name);
-
-    /* create graphics context */
-
-    gc = XCreateGC (display, win, valuemask, &values);
-
-    XSetBackground (display, gc, WhitePixel (display, screen));
-    XSetForeground (display, gc, BlackPixel (display, screen));
-    XSetLineAttributes (display, gc, 1, LineSolid, CapRound, JoinRound);
-
-    attr[0].backing_store = Always;
-    attr[0].backing_planes = 1;
-    attr[0].backing_pixel = BlackPixel(display, screen);
-
-    XChangeWindowAttributes(display, win,
-                            CWBackingStore | CWBackingPlanes | CWBackingPixel,
-                            attr);
-
-    XMapWindow (display, win);
-    XSync(display, 0);
+static void write(int N, int x, int y, int two_pixels) {
+    uint8_t *row_bitmap = bitmap + (N * y);
+    row_bitmap[x] = two_pixels;
 }
 
-int main ()
-{
-    createWindow();
+static void calc_row(int N, int y, double inverse_w, double inverse_h) {
+    for (int x=0; x<N; x+=2)
+    {
+        int r[2] = { 0 };
 
-    struct timeval start;
-    struct timeval now;
-    gettimeofday(&start, 0);
+        if (vectorSize == 2) {
+            calc_2(x, y, 255, inverse_w, inverse_h, r);
+        } else {
+            r[0] = calc_1(x, y, 255, inverse_w, inverse_h);
+            r[1] = calc_1(x + 1, y, 255, inverse_w, inverse_h);
+        }
 
-    float scale = RESN / 4.0;
- 
-    for(float limit = 1; limit <= 128; ++limit) {
-        for(int i=0; i < RESN; i++) {
-            float cImag = (i - RESN / 2.2)/scale;
-            for(int j=0; j < RESN; j += 8) {
-                float a[8];
-                float result[8];
-                for (int k = 0; k < 8; ++k) {
-                    float cReal = (j + k - RESN / 2.0)/scale;
-                    a[k] = cReal;
-                }
+        write(N, x, y, r[0]);
+        write(N, x + 1, y, r[1]);
+    }
+}
 
-                iterations(a, cImag, limit, result);
+static void printPgm2(int N) {
+    int column = 0;
+    printf("P2\n%d %d %d\n", N, N, 255);
 
-                for (int k = 0; k < 8; ++k) {
-                    /* if (getIterations(a[k], cImag, limit)) { */
-                    if (result[k]) {
-                        XDrawPoint (display, win, gc, j + k, i);
-                    }
-                }
-            }
+    for (int i = 0; i < N * N; ++i) {
+        printf(" %d", bitmap[i]);
+
+        if (++column >= 70) {
+            printf("\n");
+            column = 0;
         }
     }
 
-    gettimeofday(&now, 0);
-    printf("\n\n%f\n", now.tv_usec * 1e-6 - start.tv_usec * 1e-6 +
-           (now.tv_sec - start.tv_sec));
- 
-    XFlush (display);
+    printf("\n");
+}
+
+static void printPbm4(int N, int bytes_per_row) {
+    printf("P4\n%d %d\n", N, N);
+    fwrite(bitmap, bytes_per_row, N, stdout);
+}
+
+int main(int argc, char **argv)
+{
+    int i;
+
+/*
+ * Constant throughout the program, value depends on N
+ */
+int bytes_per_row;
+double inverse_w;
+double inverse_h;
+
+/*
+ * Program argument: height and width of the image
+ */
+int N;
+
+/*
+ * Lookup table for initial real-axis value
+ */
+v2df *Crvs;
+
+    N = atoi(argv[1]);
+    bytes_per_row = (N + 7) >> 3;
+
+    inverse_w = 2.0 / (bytes_per_row << 3);
+    inverse_h = 2.0 / N;
+
+    /*
+     * Crvs must be 16-bytes aligned on some CPU:s.
+     */
+    if (posix_memalign((void**)&Crvs, sizeof(v2df), sizeof(v2df) * N / 2))
+        return EXIT_FAILURE;
+
+#pragma omp parallel for
+    for (i = 0; i < N; i+=2) {
+        v2df Crv = { (i+1.0)*inverse_w-1.5, (i)*inverse_w-1.5 };
+        Crvs[i >> 1] = Crv;
+    }
+
+    bitmap = calloc(N, N);
+    if (bitmap == NULL)
+        return EXIT_FAILURE;
+
+#pragma omp parallel for schedule(static,1)
+    for (i = 0; i < N; i++)
+        calc_row(N, i, inverse_w, inverse_h);
+
+    printPgm2(N);
+    free(bitmap);
+    free(Crvs);
+
+    return EXIT_SUCCESS;
 }
