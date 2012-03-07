@@ -118,3 +118,50 @@ void calc_4(int x, int y,
         r[i] = rv[i] ? rv[i] + 1 : 0;
     }
 }
+
+void calc_8(int x, int y,
+            int limit,
+            double inverse_w, double inverse_h,
+            int* r) {
+    const v8sf zero = { 0.0 };
+    const v8sf one = { 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 };
+    const v8sf four = { 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0 };
+
+    inline int isNotDone(v8sf rv) {
+        return __builtin_ia32_movmskps256(__builtin_ia32_cmpps256(rv, zero, 0));
+    }
+
+    inline v8sf and(v8sf v1, v8sf v2, v8sf v3) {
+        return __builtin_ia32_andps256(__builtin_ia32_andps256(v1, v2), v3);
+    }
+
+    v8sf Civ_init;
+    v8sf Crv;
+    v8sf Zrv = zero;
+    v8sf Ziv = zero;
+    v8sf Trv = zero;
+    v8sf Tiv = zero;
+    v8sf rv = { 0. };
+
+    for (int i = 0; i < 8; ++i) {
+        Crv[i] = (x + i) * inverse_w - 1.5;
+        Civ_init[i] = y * inverse_h - 1.0;
+    }
+
+    v8sf Civ = Civ_init;
+
+    for (v8sf i = zero; i[0] < limit && isNotDone(rv); i += one) {
+        Ziv = (Zrv*Ziv) + (Zrv*Ziv) + Civ;
+        Zrv = Trv - Tiv + Crv;
+        Trv = Zrv * Zrv;
+        Tiv = Ziv * Ziv;
+
+        v8sf escaped = __builtin_ia32_cmpps256(four, Trv + Tiv, 1);
+        v8sf isRvZero = __builtin_ia32_cmpps256(rv, zero, 0);
+        rv = __builtin_ia32_orps256(rv, and(isRvZero, escaped, i));
+    }
+
+    for (int i = 0; i < 8; ++i) {
+        r[i] = rv[i] ? rv[i] + 1 : 0;
+    }
+}

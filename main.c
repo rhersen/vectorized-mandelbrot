@@ -4,7 +4,7 @@
 #include "pgm.h"
 
 static uint8_t *bitmap;
-static int vectorSize = 2;
+static int vectorSize = 4;
 
 static void write(int N, int x, int y, int two_pixels) {
     uint8_t *row_bitmap = bitmap + (N * y);
@@ -12,23 +12,27 @@ static void write(int N, int x, int y, int two_pixels) {
 }
 
 static void calc_row(int N, int y, double inverse_w, double inverse_h) {
-    for (int x=0; x<N; x+=4)
+    for (int x=0; x<N; x+=8)
     {
-        int r[2] = { 0 };
+        int r[8] = { 0 };
 
-        if (vectorSize == 4) {
-            calc_4(x, y, 255, inverse_w, inverse_h, r);
+        if (vectorSize == 8) {
+            calc_8(x, y, 255, inverse_w, inverse_h, r);
+        } else if (vectorSize == 4) {
+            for (int i = 0; i < 8; i += 4) {
+                calc_4(x + i, y, 255, inverse_w, inverse_h, r + i);
+            }
         } else if (vectorSize == 2) {
-            for (int i = 0; i < 4; i += 2) {
+            for (int i = 0; i < 8; i += 2) {
                 calc_2(x + i, y, 255, inverse_w, inverse_h, r + i);
             }
         } else {
-            for (int i = 0; i < 4; ++i) {
+            for (int i = 0; i < 8; ++i) {
                 r[i] = calc_1(x + i, y, 255, inverse_w, inverse_h);
             }
         }
 
-        for (int i = 0; i < 4; ++i) {
+        for (int i = 0; i < 8; ++i) {
             write(N, x + i, y, r[i]);
         }
     }
