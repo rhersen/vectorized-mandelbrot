@@ -32,136 +32,162 @@ int calc_1(int x, int y, int limit, double inverse_w, double inverse_h) {
     return i == limit ? 0 : i;
 }
 
+#define V v2df
+#define NV 2
+#define IS __builtin_ia32_movmskpd
+#define AND __builtin_ia32_andpd
+#define OR __builtin_ia32_orpd
+#define EQ(a,b) __builtin_ia32_cmpeqpd(a,b)
+#define GT(a,b) __builtin_ia32_cmpltpd(b,a)
+
 void calc_2(int x, int y,
             int limit,
-            double inverse_w, double inverse_h,
+            double inv_w, double inv_h,
             int* r) {
-    const v2df zero = { 0.0, 0.0 };
-    const v2df one = { 1.0, 1.0 };
-    const v2df four = { 4.0, 4.0 };
+    V zero, one, four, Civ, Crv, rv = { 0.0 };
 
-    inline int isNotDone(v2df rv) {
-        return __builtin_ia32_movmskpd(__builtin_ia32_cmpeqpd(rv, zero));
+    void writeOutput() {
+        for (int i = 0; i < NV; ++i) {
+            r[i] = rv[i] ? rv[i] + 1 : 0;
+        }
     }
 
-    inline v2df and(v2df v1, v2df v2, v2df v3) {
-        return __builtin_ia32_andpd(__builtin_ia32_andpd(v1, v2), v3);
+    void initVectors(double civ) {
+        for (int i = 0; i < NV; ++i) {
+            Crv[i] = (x + i) * inv_w - 1.5;
+            Civ[i] = civ;
+            zero[i] = 0.0;
+            one[i] = 1.0;
+            four[i] = 4.0;
+        }
     }
 
-    const v2df Civ_init = { y*inverse_h-1.0, y*inverse_h-1.0 };
-    v2df Crv = { (x)*inverse_w-1.5, (x+1.0)*inverse_w-1.5 };
-    v2df Civ = Civ_init;
-    v2df Zrv = zero;
-    v2df Ziv = zero;
-    v2df Trv = zero;
-    v2df Tiv = zero;
-    v2df rv = { 0. };
+    initVectors(y * inv_h - 1.0);
 
-    for (v2df i = zero; i[0] < limit && isNotDone(rv); i += one) {
-        Ziv = (Zrv*Ziv) + (Zrv*Ziv) + Civ;
+    V Zrv = zero, Ziv = zero, Trv = zero, Tiv = zero;
+
+    for (V i = zero; i[0] < limit && IS(EQ(rv, zero)); i += one) {
+        Ziv = Zrv * Ziv + Zrv * Ziv + Civ;
         Zrv = Trv - Tiv + Crv;
         Trv = Zrv * Zrv;
         Tiv = Ziv * Ziv;
 
-        v2df escaped = __builtin_ia32_cmpgtpd(Trv + Tiv, four);
-        v2df isRvZero = __builtin_ia32_cmpeqpd(rv, zero);
-        rv = __builtin_ia32_orpd(rv, and(isRvZero, escaped, i));
+        V escaped = GT(Trv + Tiv, four);
+        V shouldSet = AND(EQ(rv, zero), escaped);
+        rv = OR(rv, AND(shouldSet, i));
     }
 
-    r[0] = rv[0] ? rv[0] + 1 : 0;
-    r[1] = rv[1] ? rv[1] + 1 : 0;
+    writeOutput();
 }
+
+#undef V
+#undef NV
+#undef IS
+#undef AND
+#undef OR
+#undef EQ
+#undef GT
+
+#define V v4df
+#define NV 4
+#define IS __builtin_ia32_movmskpd256
+#define AND __builtin_ia32_andpd256
+#define OR __builtin_ia32_orpd256
+#define EQ(a,b) __builtin_ia32_cmppd256(a,b,0)
+#define GT(a,b) __builtin_ia32_cmppd256(b,a,1)
 
 void calc_4(int x, int y,
             int limit,
-            double inverse_w, double inverse_h,
+            double inv_w, double inv_h,
             int* r) {
-    const v4df zero = { 0.0 };
-    const v4df one = { 1.0, 1.0, 1.0, 1.0 };
-    const v4df four = { 4.0, 4.0, 4.0, 4.0 };
+    V zero, one, four, Civ, Crv, rv = { 0.0 };
 
-    inline int isNotDone(v4df rv) {
-        return __builtin_ia32_movmskpd256(__builtin_ia32_cmppd256(rv, zero, 0));
+    void writeOutput() {
+        for (int i = 0; i < NV; ++i) {
+            r[i] = rv[i] ? rv[i] + 1 : 0;
+        }
     }
 
-    inline v4df and(v4df v1, v4df v2, v4df v3) {
-        return __builtin_ia32_andpd256(__builtin_ia32_andpd256(v1, v2), v3);
+    void initVectors(double civ) {
+        for (int i = 0; i < NV; ++i) {
+            Crv[i] = (x + i) * inv_w - 1.5;
+            Civ[i] = civ;
+            zero[i] = 0.0;
+            one[i] = 1.0;
+            four[i] = 4.0;
+        }
     }
 
-    v4df Civ_init;
-    v4df Crv;
-    v4df Zrv = zero;
-    v4df Ziv = zero;
-    v4df Trv = zero;
-    v4df Tiv = zero;
-    v4df rv = { 0. };
+    initVectors(y * inv_h - 1.0);
 
-    for (int i = 0; i < 4; ++i) {
-        Crv[i] = (x + i) * inverse_w - 1.5;
-        Civ_init[i] = y * inverse_h - 1.0;
-    }
+    V Zrv = zero, Ziv = zero, Trv = zero, Tiv = zero;
 
-    v4df Civ = Civ_init;
-
-    for (v4df i = zero; i[0] < limit && isNotDone(rv); i += one) {
-        Ziv = (Zrv*Ziv) + (Zrv*Ziv) + Civ;
+    for (V i = zero; i[0] < limit && IS(EQ(rv, zero)); i += one) {
+        Ziv = Zrv * Ziv + Zrv * Ziv + Civ;
         Zrv = Trv - Tiv + Crv;
         Trv = Zrv * Zrv;
         Tiv = Ziv * Ziv;
 
-        v4df escaped = __builtin_ia32_cmppd256(four, Trv + Tiv, 1);
-        v4df isRvZero = __builtin_ia32_cmppd256(rv, zero, 0);
-        rv = __builtin_ia32_orpd256(rv, and(isRvZero, escaped, i));
+        V escaped = GT(Trv + Tiv, four);
+        V shouldSet = AND(EQ(rv, zero), escaped);
+        rv = OR(rv, AND(shouldSet, i));
     }
 
-    for (int i = 0; i < 4; ++i) {
-        r[i] = rv[i] ? rv[i] + 1 : 0;
-    }
+    writeOutput();
 }
+
+#undef V
+#undef NV
+#undef IS
+#undef AND
+#undef OR
+#undef EQ
+#undef GT
+
+#define V v8sf
+#define NV 8
+#define IS __builtin_ia32_movmskps256
+#define AND __builtin_ia32_andps256
+#define OR __builtin_ia32_orps256
+#define EQ(a,b) __builtin_ia32_cmpps256(a,b,0)
+#define GT(a,b) __builtin_ia32_cmpps256(b,a,1)
 
 void calc_8(int x, int y,
             int limit,
-            double inverse_w, double inverse_h,
+            double inv_w, double inv_h,
             int* r) {
-    const v8sf zero = { 0.0 };
-    const v8sf one = { 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 };
-    const v8sf four = { 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0 };
+    V zero, one, four, Civ, Crv, rv = { 0.0 };
 
-    inline int isNotDone(v8sf rv) {
-        return __builtin_ia32_movmskps256(__builtin_ia32_cmpps256(rv, zero, 0));
+    void writeOutput() {
+        for (int i = 0; i < NV; ++i) {
+            r[i] = rv[i] ? rv[i] + 1 : 0;
+        }
     }
 
-    inline v8sf and(v8sf v1, v8sf v2, v8sf v3) {
-        return __builtin_ia32_andps256(__builtin_ia32_andps256(v1, v2), v3);
+    void initVectors(double civ) {
+        for (int i = 0; i < NV; ++i) {
+            Crv[i] = (x + i) * inv_w - 1.5;
+            Civ[i] = civ;
+            zero[i] = 0.0;
+            one[i] = 1.0;
+            four[i] = 4.0;
+        }
     }
 
-    v8sf Civ_init;
-    v8sf Crv;
-    v8sf Zrv = zero;
-    v8sf Ziv = zero;
-    v8sf Trv = zero;
-    v8sf Tiv = zero;
-    v8sf rv = { 0. };
+    initVectors(y * inv_h - 1.0);
 
-    for (int i = 0; i < 8; ++i) {
-        Crv[i] = (x + i) * inverse_w - 1.5;
-        Civ_init[i] = y * inverse_h - 1.0;
-    }
+    V Zrv = zero, Ziv = zero, Trv = zero, Tiv = zero;
 
-    v8sf Civ = Civ_init;
-
-    for (v8sf i = zero; i[0] < limit && isNotDone(rv); i += one) {
-        Ziv = (Zrv*Ziv) + (Zrv*Ziv) + Civ;
+    for (V i = zero; i[0] < limit && IS(EQ(rv, zero)); i += one) {
+        Ziv = Zrv * Ziv + Zrv * Ziv + Civ;
         Zrv = Trv - Tiv + Crv;
         Trv = Zrv * Zrv;
         Tiv = Ziv * Ziv;
 
-        v8sf escaped = __builtin_ia32_cmpps256(four, Trv + Tiv, 1);
-        v8sf isRvZero = __builtin_ia32_cmpps256(rv, zero, 0);
-        rv = __builtin_ia32_orps256(rv, and(isRvZero, escaped, i));
+        V escaped = GT(Trv + Tiv, four);
+        V shouldSet = AND(EQ(rv, zero), escaped);
+        rv = OR(rv, AND(shouldSet, i));
     }
 
-    for (int i = 0; i < 8; ++i) {
-        r[i] = rv[i] ? rv[i] + 1 : 0;
-    }
+    writeOutput();
 }
